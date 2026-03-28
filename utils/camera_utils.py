@@ -43,10 +43,13 @@ def loadCam(args, id, cam_info, resolution_scale):
         resolution = (int(orig_w / scale), int(orig_h / scale))
 
     resized_image_rgb = PILtoTorch(cam_info.image, resolution)
-    resized_default_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['default']]
-    resized_middle_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['middle']]
-    resized_small_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['small']]
-    resized_object_masks = {'default': resized_default_object_masks, 'middle': resized_middle_object_masks, 'small': resized_small_object_masks}
+    if cam_info.object_masks is not None:
+        resized_default_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['default']]
+        resized_middle_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['middle']]
+        resized_small_object_masks = [(PILtoTorch(object_mask, resolution) > 0.5).bool() for object_mask in cam_info.object_masks['small']]
+        resized_object_masks = {'default': resized_default_object_masks, 'middle': resized_middle_object_masks, 'small': resized_small_object_masks}
+    else:
+        resized_object_masks = {'default': [], 'middle': [], 'small': []}
 
     gt_image = resized_image_rgb[:3, ...]
     loaded_mask = None
