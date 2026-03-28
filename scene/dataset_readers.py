@@ -497,9 +497,11 @@ def readNerfiesCameras(path):
         val_img = all_id[2::4]
         all_img = train_img + val_img
         ratio = 0.5
-    else:  # for hypernerf
-        train_img = dataset_json['ids'][::4]
-        all_img = train_img
+    else: # for hypernerf
+        all_id = dataset_json['ids']
+        train_img = [i for idx, i in enumerate(all_id) if idx % 4 !=0]
+        val_img = [i for idx, i in enumerate(all_id) if idx % 4 == 0]
+        all_img = train_img + val_img
         ratio = 0.5
 
     train_num = len(train_img)
