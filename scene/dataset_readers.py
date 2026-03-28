@@ -194,9 +194,9 @@ def fetchPly(path):
     colors = np.vstack([vertices['red'], vertices['green'],
                        vertices['blue']]).T / 255.0
     normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
-    obj_id_small = vertices['obj_id_small']
-    obj_id_middle = vertices['obj_id_middle']
-    obj_id_default = vertices['obj_id_default']
+    obj_id_small = np.ascontiguousarray(vertices['obj_id_small'])
+    obj_id_middle = np.ascontiguousarray(vertices['obj_id_middle'])
+    obj_id_default = np.ascontiguousarray(vertices['obj_id_default'])
     return BasicPointCloud(points=positions, colors=colors, normals=normals, obj_id_small=obj_id_small, obj_id_middle=obj_id_middle, obj_id_default=obj_id_default)
 
 
@@ -204,12 +204,14 @@ def storePly(path, xyz, rgb):
     # Define the dtype for the structured array
     dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
              ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
-             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
+             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1'),
+             ('obj_id_small', 'i4'), ('obj_id_middle', 'i4'), ('obj_id_default', 'i4')]
 
     normals = np.zeros_like(xyz)
 
     elements = np.empty(xyz.shape[0], dtype=dtype)
-    attributes = np.concatenate((xyz, normals, rgb), axis=1)
+    obj_ids = np.zeros((xyz.shape[0], 3), dtype=np.int32)
+    attributes = np.concatenate((xyz, normals, rgb, obj_ids), axis=1)
     elements[:] = list(map(tuple, attributes))
 
     # Create the PlyData object and write to file
@@ -356,7 +358,10 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(
-            shs), normals=np.zeros((num_pts, 3)))
+            shs), normals=np.zeros((num_pts, 3)),
+            obj_id_small=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_middle=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_default=np.zeros(num_pts, dtype=np.int32).copy())
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
@@ -445,7 +450,10 @@ def readNeuSDTUInfo(path, render_camera, object_camera):
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(
-            shs), normals=np.zeros((num_pts, 3)))
+            shs), normals=np.zeros((num_pts, 3)),
+            obj_id_small=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_middle=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_default=np.zeros(num_pts, dtype=np.int32).copy())
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
@@ -528,10 +536,27 @@ def readNerfiesCameras(path):
 
         FovY = focal2fov(focal, image.size[1])
         FovX = focal2fov(focal, image.size[0])
+
+        # load object masks
+        default_masks, middle_masks, small_masks = [], [], []
+        for mask_dir, mask_list in [
+            (f'{path}/multiview_masks_default_merged', default_masks),
+            (f'{path}/multiview_masks_middle_merged', middle_masks),
+            (f'{path}/multiview_masks_small_merged',  small_masks),
+        ]:
+            if os.path.isdir(mask_dir):
+                for obj_folder in sorted(os.listdir(mask_dir)):
+                    mask_path = os.path.join(mask_dir, obj_folder, f'{image_name}.jpg')
+                    if os.path.exists(mask_path):
+                        mask_list.append(Image.open(mask_path))
+
+        object_masks = {"default": default_masks, "middle": middle_masks, "small": small_masks} \
+            if (default_masks or middle_masks or small_masks) else None
+
         cam_info = CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=image.size[
                                   0], height=image.size[1],
-                              fid=fid)
+                              fid=fid, object_masks=object_masks)
         cam_infos.append(cam_info)
 
     sys.stdout.write('\n')
@@ -560,7 +585,10 @@ def readNerfiesInfo(path, eval):
         num_pts = xyz.shape[0]
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(
-            shs), normals=np.zeros((num_pts, 3)))
+            shs), normals=np.zeros((num_pts, 3)),
+            obj_id_small=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_middle=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_default=np.zeros(num_pts, dtype=np.int32).copy())
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
@@ -646,7 +674,10 @@ def readPlenopticVideoDataset(path, eval, num_images, hold_id=[0]):
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(
-            shs), normals=np.zeros((num_pts, 3)))
+            shs), normals=np.zeros((num_pts, 3)),
+            obj_id_small=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_middle=np.zeros(num_pts, dtype=np.int32).copy(),
+            obj_id_default=np.zeros(num_pts, dtype=np.int32).copy())
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
 
